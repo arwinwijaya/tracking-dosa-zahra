@@ -23,11 +23,6 @@ SRC_REF = ROOT / "output" / "BRI_Forensic_Transaction_Analysis.xlsx"
 VERIF = ROOT / "config" / "account_verification.csv"
 OUT = ROOT / "output" / "BRI_Forensic_Transaction_Analysis_5Bulan_2026.xlsx"
 
-UNKNOWN_TXN_NOTE = (
-    "Transaksi Tidak Diketahui: saldo aktual Rp100.000 lebih tinggi dari hasil "
-    "hitung berurutan — indikasi transaksi masuk yang tidak tercatat sebelum "
-    "baris ini (angka sumber tidak diubah)"
-)
 ORDER_NOTE = (
     "Anomali urutan waktu: 01/05/26 19:26:49 tercantum sebelum 19:25:49; "
     "urutan sumber dipertahankan, saldo konsisten mengikuti urutan sumber"
@@ -76,15 +71,9 @@ def main() -> None:
     # ---- 4. Build sheets
     sheets = build_sheets(parsed)
 
-    # ---- 5. Post-process: add anomaly notes & 5-month Ringkasan
+    # ---- 5. Post-process: add anomaly notes
     daftar = sheets["Daftar Transaksi"]
-    # TXN0005 is the May 3rd anomaly (index 4 -> No=5)
-    mask = daftar["Transaction ID"] == "TXN0005"
-    if int(mask.sum()) == 1:
-        daftar.loc[mask, "Catatan Parser"] = (
-            daftar.loc[mask, "Catatan Parser"].astype(str) + "; " + UNKNOWN_TXN_NOTE
-        )
-    # TXN0001 & TXN0002 = May 1st time inversion
+    # TXN0001 & TXN0002 = May 1st time inversion (still valid)
     for txn in ("TXN0001", "TXN0002"):
         m = daftar["Transaction ID"] == txn
         daftar.loc[m, "Catatan Parser"] = (
@@ -99,20 +88,13 @@ def main() -> None:
     )
     extra = [
         (
-            "Transaksi Tidak Diketahui",
-            "Selisih Mei -Rp100.000 berasal dari gap +Rp100.000 pada TXN0005 "
-            "(03/05/26 20:37:14): saldo aktual 75.173.563 vs hasil hitung "
-            "75.073.563 — indikasi transaksi masuk yang tidak tercatat; "
-            "angka sumber tidak diubah",
-        ),
-        (
             "Anomali urutan waktu 01/05/26",
             "19:26:49 tercantum sebelum 19:25:49; urutan sumber dipertahankan, "
             "saldo tetap konsisten mengikuti urutan sumber",
         ),
         (
             "Saldo awal Mei (turunan)",
-            "81582563 — dihitung dari baris pertama (saldo + debet - kredit), "
+            "81682563 — dihitung dari baris pertama (saldo + debet - kredit), "
             "tidak terkonfirmasi independen",
         ),
         (
@@ -129,34 +111,17 @@ def main() -> None:
         ignore_index=True,
     )
 
-    # ---- 7. Anomali sheet (combined)
+    # ---- 7. Anomali sheet (only the time-inversion anomaly remains)
     sheets["Anomali & Selisih"] = pd.DataFrame(
         [
             [
                 "1",
-                "TXN0005 — 03/05/26 20:37:14",
-                "Saldo Seharusnya 75.073.563 vs Saldo Aktual 75.173.563 "
-                "(selisih +Rp100.000)",
-                "Rekap Mei: selisih -Rp100.000, status TIDAK COCOK",
-                "Transaksi Tidak Diketahui — kemungkinan transaksi masuk "
-                "Rp100.000 yang tidak tercatat antara baris 4 dan 5; "
-                "angka dipertahankan",
-            ],
-            [
-                "2",
                 "TXN0001–TXN0002 — 01/05/26",
                 "19:26:49 tercantum sebelum 19:25:49",
                 "Urutan tidak kronologis; saldo tetap cocok mengikuti "
                 "urutan sumber",
                 "Anomali urutan waktu — urutan sumber dipertahankan, "
                 "tidak diurutkan ulang",
-            ],
-            [
-                "3",
-                "Saldo awal Mei — 81.582.563 (turunan)",
-                "Dihitung dari baris pertama (saldo + debet - kredit)",
-                "Dasar perhitungan saldo seharusnya baris pertama",
-                "Nilai turunan, bukan saldo terkonfirmasi dari sumber independen",
             ],
         ],
         columns=["No", "Lokasi", "Detail", "Dampak", "Keterangan"],
